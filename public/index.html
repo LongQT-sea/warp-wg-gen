@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Generate Cloudflare WARP WireGuard configuration files from the WARP API">
+  <link rel="icon" type="image/png" href="/favicon-64.png" />
+  <title>WARP Config Generator</title>
+
+  <style>
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      font-weight: 400;
+      font-display: swap;
+      src: url('/fonts/ibm-plex-mono-v20-latin-regular.woff2') format('woff2');
+    }
+
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      font-weight: 500;
+      font-display: swap;
+      src: url('/fonts/ibm-plex-mono-v20-latin-500.woff2') format('woff2');
+    }
+
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      font-weight: 600;
+      font-display: swap;
+      src: url('/fonts/ibm-plex-mono-v20-latin-600.woff2') format('woff2');
+    }
+
+    :root {
+      --bg: #0a0c0f;
+      --surface: #111418;
+      --border: #1e2530;
+      --border2: #2a3340;
+      --text: #c8d4e0;
+      --muted: #bccdcd;
+      --accent: #f6821f;
+      --accent2: #fbad41;
+      --green: #3dd68c;
+      --red: #f05252;
+      --blue: #60a5fa;
+      --glow: rgba(246, 130, 31, 0.15);
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Subtle grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.3;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 1;
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    /*  Header  */
+    header {
+      margin-bottom: 48px;
+      animation: fadeDown 0.5s ease both;
+    }
+
+    .logo-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 10px;
+    }
+
+    .cf-icon {
+      width: 36px;
+      height: 36px;
+      flex-shrink: 0;
+    }
+
+    h1 a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    h1 a:hover {
+      color: var(--accent);
+    }
+
+    h1 {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: clamp(1.4rem, 4vw, 1.9rem);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+
+    h1 span {
+      color: var(--accent);
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace;
+      padding-left: 50px;
+    }
+
+    /*  Card  */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 20px;
+      animation: fadeUp 0.5s ease both;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .card-header h2 {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .card-body {
+      padding: 20px;
+    }
+
+    /*  Form  */
+    .field-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 560px) {
+      .field-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    label .hint {
+      font-weight: 400;
+      opacity: 0.6;
+      text-transform: none;
+      letter-spacing: 0;
+      margin-left: 6px;
+      color: #bccdcd;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    textarea {
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: 5px;
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      padding: 10px 12px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+
+    input[type="text"]:focus,
+    input[type="password"]:focus,
+    textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--glow);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 72px;
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: var(--muted);
+      opacity: 0.5;
+    }
+
+    /*  Force new checkbox row  */
+    .force-new-row {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+      padding: 10px 14px;
+      border-radius: 5px;
+      border: 1px solid var(--border2);
+      background: rgba(246, 130, 31, 0.04);
+      cursor: pointer;
+      user-select: none;
+      transition: border-color 0.2s;
+    }
+
+    .force-new-row.visible {
+      display: flex;
+    }
+
+    .force-new-row:hover {
+      border-color: var(--accent);
+    }
+
+    .force-new-row input[type="checkbox"] {
+      display: none;
+    }
+
+    .force-new-box {
+      width: 14px;
+      height: 14px;
+      border: 1px solid var(--border2);
+      border-radius: 3px;
+      background: var(--bg);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .force-new-row input:checked~.force-new-text,
+    .force-new-row input:checked+.force-new-box {
+      color: var(--accent);
+    }
+
+    .force-new-row input:checked+.force-new-box {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .force-new-box::after {
+      content: '';
+      display: none;
+      width: 4px;
+      height: 7px;
+      border: 2px solid #000;
+      border-top: none;
+      border-left: none;
+      transform: rotate(45deg) translate(-1px, -1px);
+    }
+
+    .force-new-row input:checked+.force-new-box::after {
+      display: block;
+    }
+
+    .force-new-text {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      transition: color 0.15s;
+    }
+
+    /*  Button  */
+    .btn-generate {
+      width: 100%;
+      margin-top: 20px;
+      padding: 14px;
+      background: var(--accent);
+      border: none;
+      border-radius: 6px;
+      color: #000;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-generate:hover {
+      background: var(--accent2);
+      box-shadow: 0 0 24px rgba(246, 130, 31, 0.35);
+    }
+
+    .btn-generate:active {
+      transform: scale(0.99);
+    }
+
+    .btn-generate:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-generate .spinner {
+      display: none;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(0, 0, 0, 0.3);
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto;
+    }
+
+    .btn-generate.loading .btn-text {
+      display: none;
+    }
+
+    .btn-generate.loading .spinner {
+      display: block;
+    }
+
+    /*  Status bar  */
+    .status-bar {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-top: 16px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      animation: fadeUp 0.3s ease both;
+    }
+
+    .status-bar.error {
+      display: flex;
+      background: rgba(240, 82, 82, 0.08);
+      border: 1px solid rgba(240, 82, 82, 0.25);
+      color: var(--red);
+    }
+
+    .status-bar.info {
+      display: flex;
+      background: rgba(96, 165, 250, 0.08);
+      border: 1px solid rgba(96, 165, 250, 0.2);
+      color: var(--blue);
+    }
+
+    /*  Output  */
+    .output-card {
+      display: none;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    .output-card.visible {
+      display: block;
+    }
+
+    .output-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(61, 214, 140, 0.04);
+    }
+
+    .output-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--green);
+    }
+
+    .output-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-sm {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: 1px solid var(--border2);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-sm:hover {
+      border-color: var(--text);
+      color: var(--text);
+    }
+
+    .btn-sm.copied {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    pre {
+      padding: 20px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      line-height: 1.8;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-all;
+      overflow-x: auto;
+    }
+
+    /* Syntax-like coloring inside pre */
+    pre .key {
+      color: var(--blue);
+    }
+
+    pre .val {
+      color: var(--accent2);
+    }
+
+    pre .sec {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    pre .cmt {
+      color: var(--muted);
+    }
+
+    /*  Refresh token box  */
+    .refresh-box {
+      display: none;
+      margin-top: 0;
+      border-top: 1px solid var(--border);
+      background: rgba(246, 130, 31, 0.03);
+    }
+
+    .refresh-box.visible {
+      display: block;
+    }
+
+    .refresh-inner {
+      padding: 16px 20px;
+    }
+
+    .refresh-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .refresh-val {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      padding: 10px 12px;
+      word-break: break-all;
+      line-height: 1.7;
+    }
+
+    /*  Client ID box  */
+    .clientid-box {
+      display: none;
+      border-top: 1px solid var(--border);
+      background: rgba(96, 165, 250, 0.03);
+    }
+
+    .clientid-box.visible {
+      display: block;
+    }
+
+    .clientid-inner {
+      padding: 16px 20px;
+    }
+
+    .clientid-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--blue);
+      margin-bottom: 10px;
+    }
+
+    .clientid-grid {
+      display: grid;
+      grid-template-columns: 80px 1fr;
+      gap: 6px 12px;
+      align-items: start;
+    }
+
+    .clientid-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      padding-top: 2px;
+    }
+
+    .clientid-val {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      padding: 6px 10px;
+      word-break: break-all;
+      line-height: 1.6;
+    }
+
+    /*  Footer  */
+    footer {
+      margin-top: 48px;
+      text-align: center;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      animation-fill-mode: forwards;
+    }
+
+    footer a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      color: var(--text);
+    }
+
+    /*  Animations  */
+    @keyframes fadeDown {
+      0% {
+        opacity: 0.01;
+        transform: translateY(-12px);
+      }
+
+      1% {
+        opacity: 0;
+        transform: translateY(-12px);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeUp {
+      0% {
+        opacity: 0.01;
+        transform: translateY(10px);
+      }
+
+      1% {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.3;
+      }
+    }
+
+    .card:nth-child(2) {
+      animation-delay: 0.05s;
+    }
+
+    .card:nth-child(3) {
+      animation-delay: 0.10s;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="wrap">
+
+    <!-- Header -->
+    <header>
+      <div class="logo-row">
+        <svg class="cf-icon" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="36" height="36" rx="8" fill="#1a1f2a" />
+          <path d="M23.5 21.5H13a4 4 0 010-8h.2A5.5 5.5 0 0124 16.5" stroke="#f6821f" stroke-width="1.8"
+            stroke-linecap="round" />
+          <path d="M22 21.5a3 3 0 000-6h-.5a4.5 4.5 0 00-8.3-2" stroke="#fbad41" stroke-width="1.8"
+            stroke-linecap="round" />
+          <circle cx="24" cy="21.5" r="2.5" fill="#f6821f" />
+        </svg>
+        <h1><a href="https://github.com/LongQT-sea/warp-wg-gen" target="_blank" rel="noopener">WARP <span>Config</span>
+            Generator</a></h1>
+      </div>
+      <p class="subtitle">// generate wireguard config from cloudflare warp api</p>
+    </header>
+
+    <!-- Options card -->
+    <div class="card" style="animation-delay:0.05s">
+      <div class="card-header">
+        <div class="dot"></div>
+        <h2>Configuration Options</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-grid">
+
+          <div class="field">
+            <label>Teams JWT Token <span class="hint">optional</span></label>
+            <input type="password" id="teams_token" placeholder="eyJhbGci..." autocomplete="off" />
+          </div>
+
+          <div class="field full">
+            <label>Refresh Token <span class="hint">optional - paste to use existing registration</span></label>
+            <input type="password" id="refresh_token" placeholder="token,device_id,wg_private_key" autocomplete="off" />
+          </div>
+
+        </div>
+
+        <!-- Force new registration - only visible after first generation -->
+        <label class="force-new-row" id="force_new_row" for="force_new_check">
+          <input type="checkbox" id="force_new_check" />
+          <span class="force-new-box"></span>
+          <span class="force-new-text">Force new registration (ignore saved refresh token)</span>
+        </label>
+
+        <button class="btn-generate" id="btn_generate">
+          <span class="btn-text">Generate Config</span>
+          <span class="spinner"></span>
+        </button>
+
+        <div class="status-bar" id="status_bar">
+          <span id="status_msg"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Output card -->
+    <div class="card output-card" id="output_card">
+      <div class="output-topbar">
+        <div class="output-label">
+          <div class="output-dot"></div>
+          wireguard.conf
+        </div>
+        <div class="btn-row">
+          <button class="btn-sm" id="btn_copy">Copy</button>
+          <button class="btn-sm" id="btn_download">Download</button>
+        </div>
+      </div>
+      <pre id="output_pre"></pre>
+      <div class="refresh-box" id="refresh_box">
+        <div class="refresh-inner">
+          <div class="refresh-title">&#x27F3; Refresh Token - save this to update config later</div>
+          <div class="refresh-val" id="refresh_val"></div>
+        </div>
+      </div>
+      <div class="clientid-box" id="clientid_box">
+        <div class="clientid-inner">
+          <div class="clientid-title">&#x2317; Client ID — reserved bytes for AmneziaWG / sing-box / clash-meta</div>
+          <div class="clientid-grid">
+            <span class="clientid-label">Base64</span>
+            <span class="clientid-val" id="clientid_b64"></span>
+            <span class="clientid-label">Hex</span>
+            <span class="clientid-val" id="clientid_hex"></span>
+            <span class="clientid-label">Decimal</span>
+            <span class="clientid-val" id="clientid_dec"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      built by <a href="https://github.com/LongQT-sea" target="_blank" rel="noopener">LongQT-sea</a>
+      &nbsp;&middot;&nbsp; <a href="https://www.cloudflare.com/application/terms/" target="_blank"
+        rel="noopener">Cloudflare TOS</a>
+      <br /><br />
+      <span style="font-size:10px; line-height:1.6;">
+        Not affiliated with or endorsed by Cloudflare, Inc.<br />
+        Cloudflare and WARP are registered trademarks of their respective owners.
+      </span>
+    </footer>
+  </main>
+
+  <!--
+  WireGuard pure-JS Curve25519 key generation.
+  Source: https://git.zx2c4.com/wireguard-tools/tree/contrib/keygen-html/wireguard.js
+  SPDX-License-Identifier: GPL-2.0
+  Copyright (C) 2015-2020 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
+  -->
+  <script>
+    (function () {
+      function gf(init) {
+        var r = new Float64Array(16);
+        if (init) { for (var i = 0; i < init.length; ++i) r[i] = init[i]; }
+        return r;
+      }
+      function pack(o, n) {
+        var b, m = gf(), t = gf();
+        for (var i = 0; i < 16; ++i) t[i] = n[i];
+        carry(t); carry(t); carry(t);
+        for (var j = 0; j < 2; ++j) {
+          m[0] = t[0] - 0xffed;
+          for (var i = 1; i < 15; ++i) {
+            m[i] = t[i] - 0xffff - ((m[i - 1] >> 16) & 1);
+            m[i - 1] &= 0xffff;
+          }
+          m[15] = t[15] - 0x7fff - ((m[14] >> 16) & 1);
+          b = (m[15] >> 16) & 1;
+          m[14] &= 0xffff;
+          cswap(t, m, 1 - b);
+        }
+        for (var i = 0; i < 16; ++i) {
+          o[2 * i] = t[i] & 0xff;
+          o[2 * i + 1] = t[i] >> 8;
+        }
+      }
+      function carry(o) {
+        for (var i = 0; i < 16; ++i) {
+          o[(i + 1) % 16] += (i < 15 ? 1 : 38) * Math.floor(o[i] / 65536);
+          o[i] &= 0xffff;
+        }
+      }
+      function cswap(p, q, b) {
+        var t, c = ~(b - 1);
+        for (var i = 0; i < 16; ++i) { t = c & (p[i] ^ q[i]); p[i] ^= t; q[i] ^= t; }
+      }
+      function add(o, a, b) { for (var i = 0; i < 16; ++i) o[i] = (a[i] + b[i]) | 0; }
+      function subtract(o, a, b) { for (var i = 0; i < 16; ++i) o[i] = (a[i] - b[i]) | 0; }
+      function multmod(o, a, b) {
+        var t = new Float64Array(31);
+        for (var i = 0; i < 16; ++i)
+          for (var j = 0; j < 16; ++j)
+            t[i + j] += a[i] * b[j];
+        for (var i = 0; i < 15; ++i) t[i] += 38 * t[i + 16];
+        for (var i = 0; i < 16; ++i) o[i] = t[i];
+        carry(o); carry(o);
+      }
+      function invert(o, inp) {
+        var c = gf();
+        for (var a = 0; a < 16; ++a) c[a] = inp[a];
+        for (var a = 253; a >= 0; --a) {
+          multmod(c, c, c);
+          if (a !== 2 && a !== 4) multmod(c, c, inp);
+        }
+        for (var a = 0; a < 16; ++a) o[a] = c[a];
+      }
+      function clamp(z) { z[31] = (z[31] & 127) | 64; z[0] &= 248; }
+      function generatePublicKey(privateKey) {
+        var r, z = new Uint8Array(32);
+        var a = gf([1]), b = gf([9]), c = gf(), d = gf([1]), e = gf(), f = gf(),
+          _121665 = gf([0xdb41, 1]), _9 = gf([9]);
+        for (var i = 0; i < 32; ++i) z[i] = privateKey[i];
+        clamp(z);
+        for (var i = 254; i >= 0; --i) {
+          r = (z[i >>> 3] >>> (i & 7)) & 1;
+          cswap(a, b, r); cswap(c, d, r);
+          add(e, a, c); subtract(a, a, c); add(c, b, d); subtract(b, b, d);
+          multmod(d, e, e); multmod(f, a, a); multmod(a, c, a); multmod(c, b, e);
+          add(e, a, c); subtract(a, a, c); multmod(b, a, a); subtract(c, d, f);
+          multmod(a, c, _121665); add(a, a, d); multmod(c, c, a); multmod(a, d, f);
+          multmod(d, b, _9); multmod(b, e, e);
+          cswap(a, b, r); cswap(c, d, r);
+        }
+        invert(c, c); multmod(a, a, c); pack(z, a);
+        return z;
+      }
+      function encodeBase64(dest, src) {
+        var input = Uint8Array.from([
+          (src[0] >> 2) & 63,
+          ((src[0] << 4) | (src[1] >> 4)) & 63,
+          ((src[1] << 2) | (src[2] >> 6)) & 63,
+          src[2] & 63
+        ]);
+        for (var i = 0; i < 4; ++i)
+          dest[i] = input[i] + 65
+            + (((25 - input[i]) >> 8) & 6)
+            - (((51 - input[i]) >> 8) & 75)
+            - (((61 - input[i]) >> 8) & 15)
+            + (((62 - input[i]) >> 8) & 3);
+      }
+      function keyToBase64(key) {
+        var i, base64 = new Uint8Array(44);
+        for (i = 0; i < 10; ++i)
+          encodeBase64(base64.subarray(i * 4), key.subarray(i * 3));
+        encodeBase64(base64.subarray(i * 4), Uint8Array.from([key[i * 3], key[i * 3 + 1], 0]));
+        base64[43] = 61;
+        return String.fromCharCode.apply(null, base64);
+      }
+
+      window.wireguard = {
+        generateKeypair: function () {
+          var priv = new Uint8Array(32);
+          window.crypto.getRandomValues(priv);
+          priv[0] &= 248;
+          priv[31] = (priv[31] & 127) | 64;
+          var pub = generatePublicKey(priv);
+          return { privateKey: keyToBase64(priv), publicKey: keyToBase64(pub) };
+        },
+        publicKeyFromPrivate: function (privateKeyBase64) {
+          var priv = Uint8Array.from(atob(privateKeyBase64), function (c) { return c.charCodeAt(0); });
+          return keyToBase64(generatePublicKey(priv));
+        }
+      };
+    })();
+  </script>
+
+  <script type="module">
+
+    function generateWgKeys() {
+      return window.wireguard.generateKeypair();
+    }
+
+    const DEVICE_MODELS = [
+      'Samsung Galaxy S25 Ultra', 'Samsung Galaxy S24', 'Samsung Galaxy A54',
+      'Google Pixel 9 Pro', 'Google Pixel 8', 'Google Pixel 7a',
+      'Xiaomi 14 Pro', 'Xiaomi 13T', 'Redmi Note 13 Pro',
+      'OnePlus 12', 'OnePlus Nord 3', 'OPPO Find X7',
+      'Realme GT 5', 'Motorola Edge 40 Pro', 'Sony Xperia 1 V',
+    ];
+    function randomModel() {
+      return DEVICE_MODELS[Math.floor(Math.random() * DEVICE_MODELS.length)];
+    }
+
+    const PROXY_BASE = '/warp-api';
+
+    //  In-memory state
+    // Stores the refresh token from the last successful generation this session.
+    // Used automatically when the user clicks Regenerate, unless force-new is checked.
+    let savedRefreshToken = null;
+
+    // Hard guard - prevents any concurrent API calls regardless of UI state
+    let isGenerating = false;
+
+    //  API helpers
+    async function cfFetch(path, options = {}) {
+      const url = PROXY_BASE + path;
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      };
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      let res;
+      try {
+        res = await fetch(url, {
+          method: options.method || 'GET',
+          headers,
+          body: options.body ? JSON.stringify(options.body) : undefined,
+          signal: controller.signal,
+        });
+      } catch (e) {
+        if (e.name === 'AbortError') throw new Error('Request timed out after 15s');
+        throw e;
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try { const j = await res.json(); msg = j.message || j.error || msg; } catch { }
+        throw new Error(msg);
+      }
+
+      return res.json();
+    }
+
+    async function registerNew({ publicKey, teamsToken }) {
+      const headers = {};
+      if (teamsToken) headers['CF-Access-Jwt-Assertion'] = teamsToken;
+
+      return cfFetch('/reg', {
+        method: 'POST',
+        headers,
+        body: {
+          key: publicKey,
+          install_id: '',
+          fcm_token: '',
+          model: randomModel(),
+          serial_number: '',
+          name: '',
+          locale: 'en_US',
+        },
+      });
+    }
+
+    async function refreshExisting({ token, deviceId }) {
+      return cfFetch(`/reg/${deviceId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    }
+
+    //  Parse registration response
+    function parseReg(reg) {
+      const cfg = reg.config;
+      const peer = cfg.peers[0];
+
+      const stripPort = (s) => s ? s.replace(/:\d+$/, '') : s;
+
+      const endpointPort = 2408;
+      const endpointV4 = stripPort(peer.endpoint?.v4) + `:${endpointPort}`;
+      const endpointV6 = stripPort(peer.endpoint?.v6) + `:${endpointPort}`;
+      const endpointHost = stripPort(peer.endpoint?.host) + `:${endpointPort}`;
+
+      const addrV4 = cfg.interface?.addresses?.v4;
+      const addrV6 = cfg.interface?.addresses?.v6;
+
+      return {
+        peerPublicKey: peer.public_key,
+        endpointV4,
+        endpointV6,
+        endpointHost,
+        addrV4,
+        addrV6,
+        token: reg.token,
+        clientId: cfg.client_id || null,
+      };
+    }
+
+    // Decode base64 client_id into hex and decimal formats
+    function decodeClientId(b64) {
+      const bin = atob(b64);
+      const bytes = Array.from(bin, c => c.charCodeAt(0));
+      const hex = '0x' + bytes.map(b => b.toString(16).padStart(2, '0')).join('');
+      const dec = '[' + bytes.map(b => b.toString(10)).join(', ') + ']';
+      return { hex, dec };
+    }
+
+    //  Build WireGuard config string
+    function buildConfig({ privateKey, publicKey, parsed }) {
+      const clientIdLine = parsed.clientId ? `\n#CFClientIdB64 = ${parsed.clientId}` : '';
+      return `[Interface]
+PrivateKey = ${privateKey}
+#PublicKey = ${publicKey}
+Address = ${parsed.addrV4}/32, ${parsed.addrV6}/128
+DNS = 1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001
+#MTU = 1280${clientIdLine}
+
+[Peer]
+PublicKey = ${parsed.peerPublicKey}
+AllowedIPs = 0.0.0.0/0, ::/0
+PersistentKeepalive = 25
+#Endpoint = ${parsed.endpointHost}
+Endpoint = ${parsed.endpointV4}
+#Endpoint = ${parsed.endpointV6}`;
+    }
+
+    //  Syntax highlight
+    function escapeHtml(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function highlight(cfg) {
+      return cfg
+        .split('\n')
+        .map(line => {
+          line = escapeHtml(line);
+          if (line.startsWith('[')) return `<span class="sec">${line}</span>`;
+          if (line.startsWith('#')) return `<span class="cmt">${line}</span>`;
+          const eq = line.indexOf('=');
+          if (eq > -1) {
+            return `<span class="key">${line.slice(0, eq)}</span><span class="val">${line.slice(eq)}</span>`;
+          }
+          return line;
+        })
+        .join('\n');
+    }
+
+    //  UI helpers
+    const $ = id => document.getElementById(id);
+
+    function setStatus(msg, type = 'info') {
+      const bar = $('status_bar');
+      bar.className = `status-bar ${type}`;
+      $('status_msg').textContent = msg;
+    }
+
+    function clearStatus() {
+      $('status_bar').className = 'status-bar';
+    }
+
+    function setLoading(on) {
+      const btn = $('btn_generate');
+      btn.disabled = on;
+      btn.classList.toggle('loading', on);
+    }
+
+    // Switch button label between Generate / Regenerate
+    function setButtonMode(mode) {
+      const btn = $('btn_generate');
+      const text = btn.querySelector('.btn-text');
+      if (mode === 'regenerate') {
+        text.textContent = 'Regenerate Config';
+        $('force_new_row').classList.add('visible');
+      } else {
+        text.textContent = 'Generate Config';
+        $('force_new_row').classList.remove('visible');
+      }
+    }
+
+    //  Main generate handler
+    $('btn_generate').addEventListener('click', async () => {
+      // Hard guard - ignore any click while a request is already in flight
+      if (isGenerating) return;
+      isGenerating = true;
+      clearStatus();
+      setLoading(true);
+
+      try {
+        const teamsToken = $('teams_token').value.trim();
+        const manualRefresh = $('refresh_token').value.trim();
+        const forceNew = $('force_new_check').checked;
+
+        let privateKey, publicKey, reg, usedToken, usedDeviceId;
+
+        // Decide which token to use:
+        // 1. Manual refresh token field (user pasted something) - always takes priority
+        // 2. Auto saved refresh token from last generation - unless force-new is checked
+        // 3. Fresh registration
+        const refreshInput = (!forceNew && manualRefresh) || (!forceNew && savedRefreshToken) || null;
+
+        if (refreshInput) {
+          const parts = refreshInput.split(',');
+          if (parts.length < 3) throw new Error('Refresh token format: token,device_id,wg_private_key');
+
+          usedToken = parts[0].trim();
+          usedDeviceId = parts[1].trim();
+          privateKey = parts[2].trim();
+          publicKey = window.wireguard.publicKeyFromPrivate(privateKey);
+
+          setStatus('Refreshing existing config\u2026');
+          reg = await refreshExisting({ token: usedToken, deviceId: usedDeviceId });
+
+        } else {
+          setStatus('Generating WireGuard key pair\u2026');
+          const keys = generateWgKeys();
+          privateKey = keys.privateKey;
+          publicKey = keys.publicKey;
+
+          setStatus('Registering with Cloudflare WARP API\u2026');
+          reg = await registerNew({ publicKey, teamsToken });
+          usedToken = reg.token;
+          usedDeviceId = reg.id;
+        }
+
+        const parsed = parseReg(reg);
+        if (!usedToken) usedToken = parsed.token;
+
+        const configText = buildConfig({ privateKey, publicKey, parsed });
+
+        // Save refresh token in memory for future regenerations this session
+        savedRefreshToken = `${usedToken},${usedDeviceId},${privateKey}`;
+
+        // Show output
+        $('output_pre').innerHTML = highlight(configText);
+        $('output_card').classList.add('visible');
+        $('output_card').dataset.raw = configText;
+
+        // Show the full refresh token
+        $('refresh_val').textContent = savedRefreshToken;
+        $('refresh_box').classList.add('visible');
+
+        // Show client ID in all formats
+        if (parsed.clientId) {
+          const { hex, dec } = decodeClientId(parsed.clientId);
+          $('clientid_b64').textContent = parsed.clientId;
+          $('clientid_hex').textContent = hex;
+          $('clientid_dec').textContent = dec;
+          $('clientid_box').classList.add('visible');
+        }
+
+        // Switch to regenerate mode
+        setButtonMode('regenerate');
+
+        // Uncheck force-new after use so next click still uses refresh
+        $('force_new_check').checked = false;
+        if (forceNew) $('refresh_token').value = '';
+
+        clearStatus();
+        $('output_card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      } catch (err) {
+        setStatus('Error: ' + err.message, 'error');
+        console.error(err);
+      } finally {
+        setLoading(false);
+        isGenerating = false;
+      }
+    });
+
+    //  Copy
+    $('btn_copy').addEventListener('click', async () => {
+      const raw = $('output_card').dataset.raw || '';
+      await navigator.clipboard.writeText(raw);
+      const btn = $('btn_copy');
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+
+    //  Download
+    $('btn_download').addEventListener('click', () => {
+      const raw = $('output_card').dataset.raw || '';
+      const blob = new Blob([raw], { type: 'text/plain' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'warp.conf';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+
+  </script>
+</body>
+
+</html>
